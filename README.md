@@ -64,6 +64,8 @@ Optional auth support exists as secondary mode via env (for deployments that ena
 
 ## Configuration
 
+Copy `.env.example` and adjust it for your environment.
+
 ### Minimal (recommended default)
 
 ```bash
@@ -96,6 +98,7 @@ Backward-compatible env aliases are still accepted:
 ```bash
 cd research/9router-admin-mcp
 npm install
+cp .env.example .env
 npm run build
 npm start
 ```
