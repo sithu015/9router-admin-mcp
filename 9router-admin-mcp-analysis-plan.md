@@ -543,15 +543,12 @@ await server.connect(transport);
 **Effort:** Medium
 
 **LRU Cache Implementation:**
-```typescript
-// src/cache/lruCache.ts
 export class LRUCache<K, V> {
-  private cache: Map<K, { value: V; expiry: number }>;
+  private cache: Map<K, { value: V; expiry: number }> = new Map();
   private maxAge: number;
   private maxSize: number;
 
   constructor(maxAgeMs: number = 5000, maxSize: number = 100) {
-    this.cache = new Map();
     this.maxAge = maxAgeMs;
     this.maxSize = maxSize;
   }
@@ -562,11 +559,15 @@ export class LRUCache<K, V> {
       this.cache.delete(key);
       return undefined;
     }
+    // Move to end for LRU tracking
+    this.cache.delete(key);
+    this.cache.set(key, item);
     return item.value;
   }
 
   set(key: K, value: V): void {
     if (this.cache.size >= this.maxSize) {
+      // Delete first (oldest accessed) key for LRU
       const firstKey = this.cache.keys().next().value;
       this.cache.delete(firstKey);
     }
@@ -603,7 +604,6 @@ export class AdminApiClient {
     return settings;
   }
 }
-```
 
 ---
 
