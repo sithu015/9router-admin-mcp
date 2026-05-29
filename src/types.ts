@@ -3,15 +3,15 @@ export type ProviderConnection = {
   provider: string;
   authType: "oauth" | "apikey" | string;
   name: string;
-  priority?: number;
+  priority?: number | null;
   globalPriority?: number | null;
   defaultModel?: string | null;
-  isActive?: boolean;
-  email?: string;
-  testStatus?: string;
-  providerSpecificData?: Record<string, unknown>;
-  createdAt?: string;
-  updatedAt?: string;
+  isActive?: boolean | null;
+  email?: string | null;
+  testStatus?: string | null;
+  providerSpecificData?: Record<string, unknown> | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
   [key: string]: unknown;
 };
 

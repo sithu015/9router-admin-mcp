@@ -9,6 +9,8 @@ export type RequestOptions = {
 };
 
 export class HttpClient {
+  private dynamicCookie?: string;
+
   constructor(private readonly config: AppConfig) {}
 
   get baseUrl(): string {
@@ -20,6 +22,27 @@ export class HttpClient {
   }
 
   async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+    if (this.config.auth.mode === "password" && !this.dynamicCookie && path !== "/api/auth/login") {
+      await this.login();
+    }
+
+    let res = await this._doRequest<T>(path, options);
+
+    if (
+      res instanceof HttpError &&
+      res.status === 401 &&
+      this.config.auth.mode === "password" &&
+      path !== "/api/auth/login"
+    ) {
+      await this.login();
+      res = await this._doRequest<T>(path, options);
+    }
+
+    if (res instanceof HttpError) throw res;
+    return res as T;
+  }
+
+  private async _doRequest<T>(path: string, options: RequestOptions = {}): Promise<T | HttpError> {
     const url = new URL(`${this.config.baseUrl}${path}`);
 
     if (options.query) {
@@ -37,8 +60,13 @@ export class HttpClient {
       const headers: Record<string, string> = {
         "content-type": "application/json",
         accept: "application/json",
+        connection: "close",
         ...buildAuthHeaders(this.config),
       };
+
+      if (this.dynamicCookie) {
+        headers.cookie = this.dynamicCookie;
+      }
 
       const response = await fetch(url, {
         method: options.method ?? "GET",
@@ -51,12 +79,35 @@ export class HttpClient {
       const parsedBody: unknown = rawText ? tryJson(rawText) : undefined;
 
       if (!response.ok) {
-        throw new HttpError(response.status, response.statusText, parsedBody);
+        return new HttpError(response.status, response.statusText, parsedBody);
       }
 
       return parsedBody as T;
     } finally {
       clearTimeout(timeout);
+    }
+  }
+
+  private async login(): Promise<void> {
+    const url = new URL(`${this.config.baseUrl}/api/auth/login`);
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json", "connection": "close" },
+      body: JSON.stringify({ password: this.config.auth.password }),
+    });
+
+    if (!response.ok) {
+      const rawText = await response.text();
+      throw new Error(`Failed to login: ${response.status} ${response.statusText} - ${rawText}`);
+    }
+
+    await response.text(); // consume the body to free the socket
+
+    const setCookie = response.headers.get("set-cookie");
+    if (setCookie) {
+      this.dynamicCookie = setCookie.split(";")[0];
+    } else {
+      throw new Error("Login succeeded but no set-cookie header was found in the response.");
     }
   }
 }

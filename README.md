@@ -54,13 +54,15 @@ Optional extensions (supported by current 9router):
 
 Verified runtime facts:
 
-- `requireLogin=false`
+- `requireLogin=true` (often enabled in production deployments)
 - `requireApiKey=false`
-- `hasPassword=false`
+- `hasPassword=true`
 
-So this MCP defaults to **no auth headers**.
+This MCP supports **cookie** and **password** authentication specifically designed for 9router App Router admin panels. 
 
-Optional auth support exists as secondary mode via env (for deployments that enable auth).
+- **password** (Recommended): The MCP automatically logs in via `/api/auth/login` to obtain the session cookie, and retries on `401 Unauthorized`.
+- **cookie**: Pass a static session cookie directly.
+- **bearer / apiKey**: For older or different deployment configurations.
 
 ## Configuration
 
@@ -72,13 +74,19 @@ Copy `.env.example` and adjust it for your environment.
 export NINE_ROUTER_BASE_URL="http://127.0.0.1:20128"
 ```
 
-### Optional auth (secondary)
+### Authentication (Production)
 
 ```bash
-# none | bearer | apiKey | both
-export NINE_ROUTER_AUTH_MODE="none"
+# none | bearer | apiKey | both | cookie | password
+export NINE_ROUTER_AUTH_MODE="password"
 
-# optional if auth mode needs them
+# For 'password' mode (Recommended for Next.js App Router admin panels)
+export NINE_ROUTER_ADMIN_PASSWORD="YourStrongPassword"
+
+# For 'cookie' mode
+export NINE_ROUTER_SESSION_COOKIE="auth_token=eyJhbGci..."
+
+# For 'bearer' or 'apiKey' modes
 export NINE_ROUTER_BEARER_TOKEN="<token>"
 export NINE_ROUTER_API_KEY="<api-key>"
 

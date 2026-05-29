@@ -11,5 +11,9 @@ export function buildAuthHeaders(config: AppConfig): Record<string, string> {
     headers["x-api-key"] = config.auth.apiKey;
   }
 
+  if (config.auth.mode === "cookie" && config.auth.cookie) {
+    headers.cookie = config.auth.cookie;
+  }
+
   return headers;
 }

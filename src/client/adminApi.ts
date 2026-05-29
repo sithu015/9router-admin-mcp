@@ -67,15 +67,15 @@ const ProviderConnectionSchema: z.ZodType<ProviderConnection> = z
     provider: z.string(),
     authType: z.string(),
     name: z.string(),
-    priority: z.number().optional(),
+    priority: z.number().nullable().optional(),
     globalPriority: z.number().nullable().optional(),
     defaultModel: z.string().nullable().optional(),
-    isActive: z.boolean().optional(),
-    email: z.string().optional(),
-    testStatus: z.string().optional(),
-    providerSpecificData: z.record(z.unknown()).optional(),
-    createdAt: z.string().optional(),
-    updatedAt: z.string().optional(),
+    isActive: z.boolean().nullable().optional(),
+    email: z.string().nullable().optional(),
+    testStatus: z.string().nullable().optional(),
+    providerSpecificData: z.record(z.unknown()).nullable().optional(),
+    createdAt: z.string().nullable().optional(),
+    updatedAt: z.string().nullable().optional(),
   })
   .catchall(z.unknown());
 
