@@ -3,6 +3,64 @@ import { HttpClient } from "./http.js";
 import { buildResourcePath } from "../pathSafety.js";
 import type { ApiKey, Combo, ProviderConnection, ProviderNode, Settings, UsageStats } from "../types.js";
 
+// ---------------------------------------------------------------------------
+// LRU Cache (fix: was FIFO — now true LRU via Map insertion-order re-insert)
+// ---------------------------------------------------------------------------
+class LRUCache<K, V> {
+  private cache: Map<K, { value: V; expiry: number }> = new Map();
+  private maxAge: number;
+  private maxSize: number;
+
+  constructor(maxAgeMs: number = 5000, maxSize: number = 100) {
+    this.maxAge = maxAgeMs;
+    this.maxSize = maxSize;
+  }
+
+  get(key: K): V | undefined {
+    const item = this.cache.get(key);
+    if (!item || Date.now() > item.expiry) {
+      this.cache.delete(key);
+      return undefined;
+    }
+    // Move to end for LRU tracking (Map preserves insertion order)
+    this.cache.delete(key);
+    this.cache.set(key, item);
+    return item.value;
+  }
+
+  set(key: K, value: V): void {
+    // If key already exists, remove first so re-insert becomes most-recently-used
+    if (this.cache.has(key)) {
+      this.cache.delete(key);
+    } else if (this.cache.size >= this.maxSize) {
+      // Evict least-recently-used (first key in Map)
+      const firstKey = this.cache.keys().next().value;
+      if (firstKey !== undefined) {
+        this.cache.delete(firstKey);
+      }
+    }
+    this.cache.set(key, {
+      value,
+      expiry: Date.now() + this.maxAge,
+    });
+  }
+
+  invalidate(pattern?: string): void {
+    if (!pattern) {
+      this.cache.clear();
+      return;
+    }
+    for (const key of this.cache.keys()) {
+      if (String(key).includes(pattern)) {
+        this.cache.delete(key);
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Zod Schemas
+// ---------------------------------------------------------------------------
 const ProviderConnectionSchema: z.ZodType<ProviderConnection> = z
   .object({
     id: z.string(),
@@ -111,7 +169,12 @@ const DeleteMessageSchema = z.object({
   success: z.boolean().optional(),
 });
 
+// ---------------------------------------------------------------------------
+// AdminApiClient
+// ---------------------------------------------------------------------------
 export class AdminApiClient {
+  private cache = new LRUCache<string, unknown>(5000, 100); // 5s TTL, 100 items max
+
   constructor(private readonly http: HttpClient) {}
 
   async health(): Promise<Record<string, unknown>> {
@@ -141,6 +204,7 @@ export class AdminApiClient {
       method: "POST",
       body: payload,
     });
+    this.cache.invalidate("providers");
     return ProviderOneSchema.parse(res).connection;
   }
 
@@ -149,11 +213,13 @@ export class AdminApiClient {
       method: "PUT",
       body: payload,
     });
+    this.cache.invalidate("providers");
     return ProviderOneSchema.parse(res).connection;
   }
 
   async deleteProvider(id: string): Promise<{ deleted: boolean; id: string; message?: string }> {
     const res = await this.http.request<unknown>(buildResourcePath("/api/providers", id), { method: "DELETE" });
+    this.cache.invalidate("providers");
     const parsed = DeleteMessageSchema.parse(res);
     return { deleted: true, id, message: parsed.message };
   }
@@ -191,8 +257,14 @@ export class AdminApiClient {
   }
 
   async getSettings(): Promise<Settings> {
+    const cacheKey = "settings";
+    const cached = this.cache.get(cacheKey);
+    if (cached) return SettingsSchema.parse(cached);
+
     const res = await this.http.request<unknown>("/api/settings", { method: "GET" });
-    return SettingsSchema.parse(res);
+    const settings = SettingsSchema.parse(res);
+    this.cache.set(cacheKey, settings);
+    return settings;
   }
 
   async updateSettings(settings: Record<string, unknown>): Promise<Settings> {
@@ -200,6 +272,7 @@ export class AdminApiClient {
       method: "PATCH",
       body: settings,
     });
+    this.cache.invalidate("settings");
     return SettingsSchema.parse(res);
   }
 
